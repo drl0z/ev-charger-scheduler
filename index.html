@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>⚡ Charging Scheduler</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f4f8;
+            color: #1e293b;
+            min-height: 100vh;
+        }
+
+        /* ══ SETUP SCREEN ══ */
+        #setup-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+        }
+
+        .setup-box {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 2.5rem 2rem;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .setup-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+        .setup-box h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; }
+        .setup-box p  { color: #64748b; margin-bottom: 1.5rem; font-size: 0.95rem; }
+
+        /* Invite code input */
+        .code-wrap {
+            margin-bottom: 1.5rem;
+        }
+
+        .code-input {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            border: 2.5px solid #e2e8f0;
+            border-radius: 0.85rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: #1e293b;
+            background: #f8fafc;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .code-input:focus { border-color: #06b6d4; background: white; }
+        .code-input.error { border-color: #dc2626; background: #fef2f2; animation: shake 0.3s ease; }
+        .code-input.ok    { border-color: #22c55e; background: #f0fdf4; }
+
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            25%      { transform: translateX(-6px); }
+            75%      { transform: translateX(6px); }
+        }
+
+        .code-hint {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.4rem;
+        }
+
+        .name-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .name-btn {
+            padding: 1.25rem 0.5rem;
+            border: 2.5px solid #e2e8f0;
+            background: white;
+            border-radius: 1rem;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.15s ease;
+            color: #1e293b;
+        }
+        .name-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .name-btn.sel-green {
+            background: #22c55e; color: white; border-color: #16a34a;
+            box-shadow: 0 4px 16px rgba(34,197,94,0.35); transform: scale(1.04);
+        }
+        .name-btn.sel-red {
+            background: #dc2626; color: white; border-color: #b91c1c;
+            box-shadow: 0 4px 16px rgba(220,38,38,0.35); transform: scale(1.04);
+        }
+
+        /* ══ APP SCREEN ══ */
+        #app-screen { display: none; min-height: 100vh; display: none; flex-direction: column; }
+
+        .app-header {
+            background: white;
+            padding: 1rem 1.25rem 0.85rem;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+        }
+
+        .header-row1 {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.65rem;
+        }
+
+        .app-title { font-size: 1.2rem; font-weight: 800; }
+
+        .conn-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: #64748b; }
+        .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; }
+        .conn-dot.live { background: #22c55e; }
+
+        .header-row2 { display: flex; align-items: center; gap: 0.5rem; }
+
+        .user-chip {
+            padding: 0.35rem 0.85rem;
+            border-radius: 2rem;
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: white;
+        }
+        .chip-me   { background: #22c55e; }
+        .chip-them { background: #dc2626; opacity: 0.75; }
+
+        /* ══ CALENDAR ══ */
+        .cal-wrap { padding: 0.85rem 0.85rem 0; flex: 1; }
+
+        .week-label {
+            font-size: 0.68rem; font-weight: 700;
+            color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 0.4rem;
+        }
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 0.9rem;
+        }
+
+        .day-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+
+        .day-name {
+            font-size: 0.58rem; font-weight: 700;
+            color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .day-cell {
+            width: 100%; aspect-ratio: 1;
+            border-radius: 0.55rem;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            user-select: none; -webkit-user-select: none;
+            touch-action: manipulation;
+            border: 2px solid transparent;
+        }
+
+        .day-cell.available { background: white; border-color: #e2e8f0; color: #1e293b; }
+        .day-cell.available:active { transform: scale(0.92); background: #f0fdf4; border-color: #22c55e; }
+        .day-cell.mine {
+            background: #22c55e; color: white;
+            box-shadow: 0 3px 10px rgba(34,197,94,0.4);
+        }
+        .day-cell.mine:active { transform: scale(0.92); box-shadow: none; }
+        .day-cell.theirs {
+            background: #dc2626; color: white;
+            box-shadow: 0 3px 8px rgba(220,38,38,0.3);
+            cursor: not-allowed;
+        }
+        .day-cell.past { background: #f1f5f9; color: #d1d5db; cursor: not-allowed; border-color: transparent; }
+        .day-cell.today.available { border-color: #06b6d4 !important; }
+        .day-cell.today.past      { border-color: #e2e8f0 !important; }
+
+        /* ══ FOOTER ══ */
+        .app-footer {
+            padding: 1.5rem 1rem 2rem;
+            text-align: center;
+        }
+
+        .switch-link {
+            background: none; border: none;
+            color: #cbd5e1; font-size: 0.7rem;
+            cursor: pointer; text-decoration: none;
+            font-family: inherit;
+        }
+        .switch-link:hover { color: #94a3b8; }
+
+        /* ══ ERRORS ══ */
+        #error-container { padding: 0 1rem; }
+        .error-box {
+            background: #fef2f2; border-left: 3px solid #dc2626;
+            padding: 0.7rem 1rem; border-radius: 0.5rem;
+            font-size: 0.83rem; color: #7f1d1d; margin-top: 0.6rem;
+        }
+
+        /* ══ TOAST ══ */
+        .toast {
+            position: fixed; bottom: 3.5rem; left: 50%;
+            transform: translateX(-50%) translateY(4rem);
+            background: #1e293b; color: white;
+            padding: 0.55rem 1.2rem; border-radius: 2rem;
+            font-size: 0.83rem; font-weight: 600;
+            opacity: 0; transition: all 0.22s ease;
+            pointer-events: none; white-space: nowrap; z-index: 100;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- ══ SETUP ══ -->
+<div id="setup-screen">
+    <div class="setup-box">
+        <div class="setup-icon">⚡</div>
+        <h2>Charging Scheduler</h2>
+        <p>Enter invite code to access</p>
+
+        <div class="code-wrap">
+            <input class="code-input" id="code-input" type="text"
+                   maxlength="6" placeholder="••••" autocomplete="off"
+                   autocorrect="off" autocapitalize="characters" spellcheck="false">
+            <div class="code-hint" id="code-hint">Ask your neighbour for the code</div>
+        </div>
+
+        <p style="margin-bottom:1rem; color:#64748b; font-size:0.9rem;" id="who-label" style="display:none;">Who are you?</p>
+        <div class="name-buttons">
+            <button class="name-btn" id="btn-u1" disabled>…</button>
+            <button class="name-btn" id="btn-u2" disabled>…</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app-screen">
+    <div class="app-header">
+        <div class="header-row1">
+            <span class="app-title">⚡ Charging Scheduler</span>
+            <div class="conn-indicator">
+                <div class="conn-dot" id="conn-dot"></div>
+                <span id="conn-text">…</span>
+            </div>
+        </div>
+        <div class="header-row2">
+            <div class="user-chip chip-me"   id="chip-me">Me</div>
+            <div class="user-chip chip-them" id="chip-them">Other</div>
+        </div>
+    </div>
+
+    <div id="error-container"></div>
+    <div class="cal-wrap" id="cal-wrap"></div>
+
+    <div class="app-footer">
+        <button class="switch-link" onclick="resetIdentity()">switch user</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const SUPABASE_URL      = 'https://oxkhtuutlymclkhvaobm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94a2h0dXV0bHltY2xraHZhb2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODMxNjIsImV4cCI6MjA4Nzg1OTE2Mn0.aCZbtQa3MqLWu8olcQ8_5nszGkIAcpO-GEtnGl3Wjbs';
+
+    const S = { myId: null, myName: null, users: [], schedule: {}, sb: null, sub: null, inviteCode: null };
+
+    // cookies
+    const setCook = (k,v) => { const d=new Date(); d.setFullYear(d.getFullYear()+1); document.cookie=`${k}=${encodeURIComponent(v)};expires=${d.toUTCString()};path=/`; };
+    const getCook = k => { const m=document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith(k+'=')); return m?decodeURIComponent(m.slice(k.length+1)):null; };
+    const delCook = k => { document.cookie=`${k}=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/`; };
+
+    // toast
+    let _tt;
+    function toast(msg) {
+        const el=document.getElementById('toast');
+        el.textContent=msg; el.classList.add('show');
+        clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),2200);
+    }
+
+    // error
+    function showError(msg) {
+        const c=document.getElementById('error-container');
+        const d=document.createElement('div'); d.className='error-box'; d.textContent=msg;
+        c.appendChild(d); setTimeout(()=>d.remove(),6000);
+    }
+
+    // connection
+    function setConn(yes) {
+        document.getElementById('conn-dot').classList.toggle('live', yes);
+        document.getElementById('conn-text').textContent = yes ? 'Live' : 'Offline';
+    }
+
+    // date helpers
+    const dateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    function mondayOf(d) { const c=new Date(d),day=c.getDay(); c.setDate(c.getDate()-day+(day===0?-6:1)); c.setHours(0,0,0,0); return c; }
+    function isPast(d)   { const t=new Date(); t.setHours(0,0,0,0); return d<t; }
+    function isToday(d)  { const t=new Date(); t.setHours(0,0,0,0); const c=new Date(d); c.setHours(0,0,0,0); return t.getTime()===c.getTime(); }
+
+    const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // render calendar
+    function render() {
+        const wrap = document.getElementById('cal-wrap');
+        wrap.innerHTML = '';
+        const monday = mondayOf(new Date());
+
+        for (let w = 0; w < 2; w++) {
+            const ws = new Date(monday);
+            ws.setDate(monday.getDate() + w*7);
+
+            const lbl = document.createElement('div');
+            lbl.className = 'week-label';
+            lbl.textContent = w===0 ? 'This week' : `Week of ${ws.getDate()} ${MONS[ws.getMonth()]}`;
+            wrap.appendChild(lbl);
+
+            const grid = document.createElement('div');
+            grid.className = 'week-grid';
+
+            for (let d = 0; d < 7; d++) {
+                const date = new Date(ws);
+                date.setDate(ws.getDate() + d);
+                const ds = dateStr(date);
+                const claimedBy = S.schedule[ds];
+                const past  = isPast(date);
+                const mine  = claimedBy === S.myId;
+                const their = claimedBy && !mine;
+
+                const col = document.createElement('div');
+                col.className = 'day-col';
+
+                const dn = document.createElement('div');
+                dn.className = 'day-name';
+                dn.textContent = DAYS[d];
+                col.appendChild(dn);
+
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                if      (past)  cell.classList.add('past');
+                else if (mine)  cell.classList.add('mine');
+                else if (their) cell.classList.add('theirs');
+                else            cell.classList.add('available');
+                if (isToday(date)) cell.classList.add('today');
+                cell.textContent = date.getDate();
+
+                if (!past) {
+                    cell.addEventListener('click', async () => {
+                        if (their) { toast('Already booked!'); return; }
+                        if (mine) {
+                            delete S.schedule[ds]; render();
+                            const {error} = await S.sb.from('schedule').delete().eq('date',ds);
+                            if (error) { showError('Could not release.'); await loadSchedule(); }
+                        } else {
+                            S.schedule[ds] = S.myId; render();
+                            const {error} = await S.sb.from('schedule').upsert({date:ds,claimed_by:S.myId},{onConflict:'date'});
+                            if (error) { showError('Could not save.'); await loadSchedule(); }
+                        }
+                    });
+                }
+
+                col.appendChild(cell);
+                grid.appendChild(col);
+            }
+            wrap.appendChild(grid);
+        }
+    }
+
+    // supabase ops
+    async function loadSchedule() {
+        const {data,error} = await S.sb.from('schedule').select('*');
+        if (error) throw new Error('Schedule: '+error.message);
+        S.schedule = {};
+        (data||[]).forEach(r => { S.schedule[r.date] = r.claimed_by; });
+        render();
+    }
+
+    function setupRealtime() {
+        if (S.sub) { S.sb.removeAllChannels(); S.sub=null; }
+        S.sub = S.sb.channel('ev-sched')
+            .on('postgres_changes', {event:'*', schema:'public', table:'schedule'}, payload => {
+                if (payload.eventType==='DELETE') {
+                    if (payload.old?.date) delete S.schedule[payload.old.date];
+                } else if (payload.new?.date) {
+                    if (payload.new.claimed_by) S.schedule[payload.new.date] = payload.new.claimed_by;
+                    else delete S.schedule[payload.new.date];
+                }
+                render();
+            })
+            .subscribe(status => {
+                setConn(status==='SUBSCRIBED');
+                if (status==='CHANNEL_ERROR'||status==='CLOSED') setTimeout(setupRealtime, 3000);
+            });
+    }
+
+    async function goApp() {
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display   = 'block';
+        document.getElementById('chip-me').textContent   = S.myName;
+        document.getElementById('chip-them').textContent = S.users.find(u=>u.user_id!==S.myId)?.name || 'Other';
+        try { setupRealtime(); await loadSchedule(); }
+        catch(e) { showError(e.message); setConn(false); }
+    }
+
+    function resetIdentity() {
+        delCook('ev-uid'); delCook('ev-uname'); delCook('ev-auth');
+        location.reload();
+    }
+
+    // ── Invite code logic ──────────────────────────────────
+    function unlockNameButtons() {
+        const b1=document.getElementById('btn-u1'), b2=document.getElementById('btn-u2');
+        document.getElementById('who-label').style.display = 'block';
+
+        if (S.users.length >= 2) {
+            b1.textContent=S.users[0].name; b1.dataset.uid=S.users[0].user_id; b1.disabled=false;
+            b2.textContent=S.users[1].name; b2.dataset.uid=S.users[1].user_id; b2.disabled=false;
+        }
+
+        async function pick(btn, cls) {
+            document.getElementById('btn-u1').classList.remove('sel-green','sel-red');
+            document.getElementById('btn-u2').classList.remove('sel-green','sel-red');
+            btn.classList.add(cls);
+            S.myId=btn.dataset.uid; S.myName=btn.textContent;
+            setCook('ev-uid',S.myId); setCook('ev-uname',S.myName);
+            await new Promise(r=>setTimeout(r,180));
+            await goApp();
+        }
+
+        b1.addEventListener('click', ()=>pick(b1,'sel-green'));
+        b2.addEventListener('click', ()=>pick(b2,'sel-red'));
+    }
+
+    function setupCodeInput() {
+        const input = document.getElementById('code-input');
+        const hint  = document.getElementById('code-hint');
+
+        input.addEventListener('input', () => {
+            input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+            input.classList.remove('error','ok');
+            hint.textContent = 'Ask your neighbour for the code';
+            hint.style.color = '#94a3b8';
+        });
+
+        input.addEventListener('keyup', checkCode);
+        // Also check on each keystroke for instant feedback
+        input.addEventListener('input', checkCode);
+    }
+
+    function checkCode() {
+        const input = document.getElementById('code-input');
+        const hint  = document.getElementById('code-hint');
+        const typed = input.value.trim().toUpperCase();
+
+        if (!S.inviteCode || typed.length < S.inviteCode.length) return;
+
+        if (typed === S.inviteCode.toUpperCase()) {
+            input.classList.remove('error'); input.classList.add('ok');
+            hint.textContent = '✓ Code accepted';
+            hint.style.color = '#22c55e';
+            setCook('ev-auth','1');
+            setTimeout(unlockNameButtons, 400);
+        } else if (typed.length >= S.inviteCode.length) {
+            input.classList.remove('ok'); input.classList.add('error');
+            hint.textContent = 'Wrong code — try again';
+            hint.style.color = '#dc2626';
+        }
+    }
+
+    // ── Boot ──────────────────────────────────────────────
+    (async () => {
+        S.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Load users + invite code in parallel
+        try {
+            const [usersRes, settingsRes] = await Promise.all([
+                S.sb.from('users').select('*').order('created_at'),
+                S.sb.from('settings').select('value').eq('key','invite_code').single()
+            ]);
+
+            if (usersRes.error)    throw new Error('Users: '   + usersRes.error.message);
+            if (settingsRes.error) throw new Error('Settings: ' + settingsRes.error.message);
+
+            S.users      = usersRes.data    || [];
+            S.inviteCode = settingsRes.data?.value || 'ZAP7';
+        } catch(e) {
+            showError(e.message);
+            // Fall back to hardcoded code so the app still works if settings table missing
+            S.inviteCode = 'ZAP7';
+        }
+
+        // Already authenticated this session?
+        const authed  = getCook('ev-auth');
+        const savedId = getCook('ev-uid');
+        const savedName = getCook('ev-uname');
+
+        if (authed && savedId && S.users.find(u=>u.user_id===savedId)) {
+            S.myId=savedId; S.myName=savedName;
+            await goApp(); return;
+        }
+
+        // Authed but no user picked yet
+        if (authed) {
+            setupCodeInput();
+            // Skip straight to name selection
+            const input = document.getElementById('code-input');
+            input.closest('.code-wrap').style.display = 'none';
+            unlockNameButtons();
+            return;
+        }
+
+        // Fresh visit — show code input
+        setupCodeInput();
+        document.getElementById('code-input').focus();
+    })();
+</script>
+</body>
+</html>
