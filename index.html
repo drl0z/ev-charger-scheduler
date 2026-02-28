@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="EV Charger">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="manifest.json">
     <title>⚡ Charging Scheduler</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <style>
@@ -108,12 +114,31 @@
 
         .app-title { font-size: 1.2rem; font-weight: 800; }
 
+        .header-right { display: flex; align-items: center; gap: 0.6rem; }
+
         .conn-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: #64748b; }
         .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; transition: background 0.3s; }
         .conn-dot.live { background: #22c55e; }
         .conn-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
 
         @keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
+
+        /* Install button */
+        .install-btn {
+            display: none; /* shown by JS when appropriate */
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.65rem;
+            background: #f0f9ff;
+            border: 1.5px solid #06b6d4;
+            border-radius: 1rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #06b6d4;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .install-btn:active { background: #e0f2fe; }
 
         .header-row2 { display: flex; align-items: center; gap: 0.5rem; }
 
@@ -126,6 +151,61 @@
         }
         .chip-me   { background: #22c55e; }
         .chip-them { background: #dc2626; opacity: 0.75; }
+
+        /* ══ INSTALL MODAL (iOS instructions) ══ */
+        .modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .modal-overlay.show { display: flex; }
+
+        .modal-box {
+            background: white;
+            border-radius: 1.25rem;
+            padding: 1.75rem 1.5rem;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 -4px 32px rgba(0,0,0,0.15);
+            animation: slideUp 0.25s ease;
+        }
+        @keyframes slideUp { from{transform:translateY(2rem);opacity:0} to{transform:translateY(0);opacity:1} }
+
+        .modal-box h3 { font-size: 1.1rem; font-weight: 800; margin-bottom: 0.5rem; }
+        .modal-box p  { color: #64748b; font-size: 0.88rem; margin-bottom: 1.25rem; }
+
+        .modal-steps { text-align: left; margin-bottom: 1.5rem; }
+        .modal-step {
+            display: flex; align-items: flex-start; gap: 0.75rem;
+            margin-bottom: 0.85rem; font-size: 0.88rem;
+        }
+        .step-num {
+            min-width: 24px; height: 24px;
+            background: #06b6d4; color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+        .step-text { padding-top: 2px; line-height: 1.4; }
+        .step-text strong { color: #1e293b; }
+
+        .modal-close {
+            width: 100%;
+            padding: 0.85rem;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #64748b;
+            cursor: pointer;
+        }
 
         /* ══ CALENDAR ══ */
         .cal-wrap { padding: 0.85rem 0.85rem 0; }
@@ -179,10 +259,7 @@
         .day-cell.today.available { border-color: #06b6d4 !important; }
 
         /* ══ FOOTER ══ */
-        .app-footer {
-            padding: 1.5rem 1rem 2rem;
-            text-align: center;
-        }
+        .app-footer { padding: 1.5rem 1rem 2rem; text-align: center; }
         .switch-link {
             background: none; border: none;
             color: #cbd5e1; font-size: 0.7rem;
@@ -219,15 +296,13 @@
         <div class="setup-icon">⚡</div>
         <h2>Charging Scheduler</h2>
         <p>Enter invite code to access</p>
-
         <div class="code-wrap" id="code-wrap">
             <input class="code-input" id="code-input" type="text"
                    maxlength="6" placeholder="••••" autocomplete="off"
                    autocorrect="off" autocapitalize="characters" spellcheck="false">
             <div class="code-hint" id="code-hint">Ask your neighbour for the code</div>
         </div>
-
-        <p style="margin-bottom:1rem; color:#64748b; font-size:0.9rem; display:none;" id="who-label">Who are you?</p>
+        <p style="margin-bottom:1rem;color:#64748b;font-size:0.9rem;display:none;" id="who-label">Who are you?</p>
         <div class="name-buttons">
             <button class="name-btn" id="btn-u1" disabled>…</button>
             <button class="name-btn" id="btn-u2" disabled>…</button>
@@ -240,9 +315,15 @@
     <div class="app-header">
         <div class="header-row1">
             <span class="app-title">⚡ Charging Scheduler</span>
-            <div class="conn-indicator">
-                <div class="conn-dot" id="conn-dot"></div>
-                <span id="conn-text">Connecting…</span>
+            <div class="header-right">
+                <!-- Install button — shown by JS -->
+                <button class="install-btn" id="install-btn" onclick="handleInstall()">
+                    📲 Add to home
+                </button>
+                <div class="conn-indicator">
+                    <div class="conn-dot" id="conn-dot"></div>
+                    <span id="conn-text">Connecting…</span>
+                </div>
             </div>
         </div>
         <div class="header-row2">
@@ -259,6 +340,29 @@
     </div>
 </div>
 
+<!-- ══ iOS INSTALL MODAL ══ -->
+<div class="modal-overlay" id="ios-modal" onclick="closeModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <h3>📲 Add to Home Screen</h3>
+        <p>Open this app directly from your home screen like a native app</p>
+        <div class="modal-steps">
+            <div class="modal-step">
+                <div class="step-num">1</div>
+                <div class="step-text">Tap the <strong>Share button</strong> (the box with an arrow) at the bottom of Safari</div>
+            </div>
+            <div class="modal-step">
+                <div class="step-num">2</div>
+                <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+            </div>
+            <div class="modal-step">
+                <div class="step-num">3</div>
+                <div class="step-text">Tap <strong>Add</strong> — the app icon will appear on your home screen</div>
+            </div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">Got it</button>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -272,7 +376,9 @@
         inviteCode: null,
         connected: false,
         pollTimer: null,
-        reconnectTimer: null
+        reconnectTimer: null,
+        watchdogTimer: null,
+        deferredInstallPrompt: null  // Android PWA install prompt
     };
 
     // ── cookies ──
@@ -295,9 +401,50 @@
         c.appendChild(d); setTimeout(()=>d.remove(),6000);
     }
 
+    // ── install button logic ──
+    function isIos() {
+        return /iphone|ipad|ipod/i.test(navigator.userAgent);
+    }
+    function isInStandaloneMode() {
+        return window.matchMedia('(display-mode: standalone)').matches
+            || window.navigator.standalone === true;
+    }
+
+    // Capture Android's beforeinstallprompt event early
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        S.deferredInstallPrompt = e;
+        showInstallButton();
+    });
+
+    function showInstallButton() {
+        if (isInStandaloneMode()) return; // already installed
+        const btn = document.getElementById('install-btn');
+        if (btn) btn.style.display = 'flex';
+    }
+
+    function handleInstall() {
+        if (S.deferredInstallPrompt) {
+            // Android — use native prompt
+            S.deferredInstallPrompt.prompt();
+            S.deferredInstallPrompt.userChoice.then(choice => {
+                if (choice.outcome === 'accepted') {
+                    document.getElementById('install-btn').style.display = 'none';
+                }
+                S.deferredInstallPrompt = null;
+            });
+        } else if (isIos()) {
+            // iOS — show manual instructions modal
+            document.getElementById('ios-modal').classList.add('show');
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('ios-modal').classList.remove('show');
+    }
+
     // ── connection status ──
     function setConn(state) {
-        // state: 'connecting' | 'live' | 'offline'
         const dot  = document.getElementById('conn-dot');
         const text = document.getElementById('conn-text');
         dot.classList.remove('live','connecting');
@@ -305,7 +452,7 @@
             dot.classList.add('live');
             text.textContent = 'Live';
             S.connected = true;
-            stopPolling(); // realtime is working, no need to poll
+            stopPolling();
         } else if (state === 'connecting') {
             dot.classList.add('connecting');
             text.textContent = 'Connecting…';
@@ -313,24 +460,44 @@
         } else {
             text.textContent = 'Offline';
             S.connected = false;
-            startPolling(); // fall back to polling when realtime fails
+            startPolling();
         }
     }
 
-    // ── fallback polling (every 8s when offline) ──
+    // ── fallback polling ──
     function startPolling() {
         if (S.pollTimer) return;
         S.pollTimer = setInterval(async () => {
             try {
                 await loadSchedule();
-                // If fetch succeeded, try to reconnect realtime too
-                setupRealtime();
-            } catch(e) { /* still offline, keep trying */ }
+                setupRealtime(); // try to get realtime back
+            } catch(e) { /* still offline */ }
         }, 8000);
     }
-
     function stopPolling() {
         if (S.pollTimer) { clearInterval(S.pollTimer); S.pollTimer = null; }
+    }
+
+    // ── watchdog: heartbeat every 30s to detect silent drops ──
+    function startWatchdog() {
+        if (S.watchdogTimer) clearInterval(S.watchdogTimer);
+        S.watchdogTimer = setInterval(async () => {
+            if (!S.connected) {
+                setupRealtime();
+                return;
+            }
+            // Ping Supabase with a lightweight query to confirm connection is alive
+            try {
+                const { error } = await S.sb.from('settings').select('key').limit(1);
+                if (error) throw error;
+                // Connection alive — also silently refresh schedule in case we missed anything
+                await loadSchedule();
+            } catch(e) {
+                // Connection dead — reconnect
+                setConn('offline');
+                setupRealtime();
+            }
+        }, 30000);
     }
 
     // ── date helpers ──
@@ -408,7 +575,7 @@
         }
     }
 
-    // ── supabase: load schedule ──
+    // ── load schedule ──
     async function loadSchedule() {
         const {data,error} = await S.sb.from('schedule').select('*');
         if (error) throw new Error(error.message);
@@ -417,14 +584,15 @@
         render();
     }
 
-    // ── supabase: realtime ──
+    // ── realtime ──
     function setupRealtime() {
         if (S.reconnectTimer) { clearTimeout(S.reconnectTimer); S.reconnectTimer = null; }
-        if (S.sub) { try { S.sb.removeAllChannels(); } catch(e){} S.sub = null; }
+        try { if (S.sub) S.sb.removeAllChannels(); } catch(e) {}
+        S.sub = null;
 
         setConn('connecting');
 
-        S.sub = S.sb.channel('ev-sched-' + Date.now()) // unique channel name avoids stale state
+        S.sub = S.sb.channel('ev-' + Date.now())
             .on('postgres_changes', {event:'*', schema:'public', table:'schedule'}, payload => {
                 if (payload.eventType === 'DELETE') {
                     if (payload.old?.date) delete S.schedule[payload.old.date];
@@ -437,11 +605,9 @@
             .subscribe(status => {
                 if (status === 'SUBSCRIBED') {
                     setConn('live');
-                    // Refresh data now that we're connected — catches anything missed while offline
                     loadSchedule().catch(()=>{});
                 } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
                     setConn('offline');
-                    // Exponential-ish backoff: retry after 5s
                     S.reconnectTimer = setTimeout(setupRealtime, 5000);
                 }
             });
@@ -454,18 +620,30 @@
         document.getElementById('chip-me').textContent   = S.myName;
         document.getElementById('chip-them').textContent = S.users.find(u=>u.user_id!==S.myId)?.name || 'Other';
 
-        // Load schedule immediately — don't wait for realtime to be ready
-        try { await loadSchedule(); } catch(e) { /* will retry via polling */ }
+        // Show install button if appropriate
+        if (!isInStandaloneMode()) {
+            if (isIos()) showInstallButton();
+            // Android button shown via beforeinstallprompt event above
+        }
 
-        // Then set up realtime in parallel
+        // Load data immediately, then set up realtime
+        try { await loadSchedule(); } catch(e) {}
         setupRealtime();
+        startWatchdog();
 
-        // Also listen for page becoming visible again (e.g. switching back from another app)
+        // On visibility change — aggressively reconnect
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 loadSchedule().catch(()=>{});
-                if (!S.connected) setupRealtime();
+                // Always force a fresh realtime connection when returning to app
+                setupRealtime();
             }
+        });
+
+        // Also on online event (device reconnects to network)
+        window.addEventListener('online', () => {
+            loadSchedule().catch(()=>{});
+            setupRealtime();
         });
     }
 
@@ -517,7 +695,7 @@
             hint.textContent = '✓ Code accepted'; hint.style.color = '#22c55e';
             setCook('ev-auth','1');
             setTimeout(unlockNameButtons, 400);
-        } else if (typed.length >= S.inviteCode.length) {
+        } else {
             input.classList.remove('ok'); input.classList.add('error');
             hint.textContent = 'Wrong code — try again'; hint.style.color = '#dc2626';
         }
@@ -532,7 +710,7 @@
                 S.sb.from('users').select('*').order('created_at'),
                 S.sb.from('settings').select('value').eq('key','invite_code').single()
             ]);
-            if (usersRes.error)    throw new Error(usersRes.error.message);
+            if (usersRes.error) throw new Error(usersRes.error.message);
             S.users      = usersRes.data || [];
             S.inviteCode = settingsRes.data?.value || 'ZAP7';
         } catch(e) {
